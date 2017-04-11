@@ -134,20 +134,14 @@ void openOutFile(char * file){
 }
 
 void print_help(){
-	fprintf(stdout,
-	"Usage:\n"
-	" tp0 -h\n"
-	" tp0 -V\n"
-	" tp0 [OPTIONS]\n"
-	"Options:\n"
-	" -V, --version\t Print version and quit.\n"
-	" -h, --help \t Print this information.\n"
-	" -i, --input \t Location of the input file.\n"
-	" -o, --output \t Location of the output file.\n"
-	" -a, --action \t Program action: encode (default) or decode.\n"
-	"Examples:\n"
-	" tp0 -a encode -i ~/input -o ~/output\n"
-	" tp0 -a decode\n");
+	fprintf(stdout, "Modo de empleo: ./tp0 [OPTIONS]\n"
+"OPTIONS:\n"
+"-e --encode Encodes to Base64\n"
+"-d --decode Decodes from Base64\n"
+"-i --input file Reads from file or stdin\n"
+"-o --output file Writes to file or stdout\n"
+"-v --version Show version string\n"
+"-h --help Print this message and quit\n");
 }
 
 void print_version(){
