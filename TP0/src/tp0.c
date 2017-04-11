@@ -132,7 +132,7 @@ void print_help(){
 "  tp0 -V\n"
 "  tp0 [OPTIONS]\n"
 "Options:\n"
-"  -V, --version \t Print version and quit.\n"
+"  -V, --version\t Print version and quit.\n"
 "  -h, --help \t Print this information.\n"
 "  -i, --input \t Location of the input file.\n"
 "  -o, --output \t Location of the output file.\n"
