@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <string.h>
 
 #define ALPHABET "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 #define ALPHABET_LENGTH 64
@@ -148,10 +149,12 @@ int main(int argc,  char* const* argv)
 {
 	int encode = -1;
 	int c;
+	char *enc="encode";
+	char *dec="decode";
 	extern char *optarg;
 	extern int optind, opterr, optopt;
 	/* Una cadena que lista las opciones cortas válidas */
-	const char* const opcionesCortas = "edi:o:vh";
+	const char* const opcionesCortas = "a:i:o:vh";
 
 	/* Una estructura de varios arrays describiendo las opciones largas */
 	const struct option opcionesLargas[] = {
@@ -159,8 +162,7 @@ int main(int argc,  char* const* argv)
 	  { "version", no_argument, NULL,'v'},
 	  { "input",no_argument, NULL,'i'},
 	  { "output",no_argument, NULL,'o'},
-	  { "encode",no_argument, NULL,'e'},
-	  { "decode",no_argument, NULL,'d'},
+	  { "action",no_argument, NULL,'a'},
 	  { NULL,     no_argument, NULL, 0 }
 	};
 
@@ -169,17 +171,15 @@ int main(int argc,  char* const* argv)
 	while ((c = getopt_long(argc, argv, opcionesCortas, opcionesLargas, NULL)) != -1)
 	 switch (c)
 	   {
-	   case 'e':
-	     if (encode == -1)
-	    	 encode = 1;
-	     else
-	    	 selectionError();
-	     break;
-	   case 'd':
-	     if (encode == -1)
-	    	 encode = 0;
-	     else
-	    	 selectionError();
+	   case 'a':
+	     if (encode == -1) {
+	     	if (strcmp(optarg, enc) == 0)
+	    		encode = 1;
+	    	else if (strcmp(optarg, dec) == 0)
+	    		encode = 0;
+		    else
+		    	selectionError();
+		}
 	     break;
 	   case 'i':
 	     openInFile(optarg);
@@ -194,7 +194,7 @@ int main(int argc,  char* const* argv)
 	     print_version();
 	     exit(EXIT_SUCCESS);
 	   case '?':
-	     if (optopt == 'i' || optopt == 'o')
+	     if (optopt == 'i' || optopt == 'o' || optopt == 'a')
 	       fprintf (stderr, "Option -%c requires an argument.\n", optopt);
 	     else
 	       fprintf (stderr, "Unknown option character\n");
