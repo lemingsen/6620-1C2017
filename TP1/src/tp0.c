@@ -11,8 +11,8 @@ int do_action(int encode, int fdIn, int fdOut)
 
 	if (encode)
 		r = base64_encode(fdIn, fdOut);
-	else
-		r = base64_decode(fdIn, fdOut);
+	//else
+		//r = base64_decode(fdIn, fdOut);
 
 	return r;
 }
@@ -112,11 +112,11 @@ int main(int argc,  char* const* argv)
 				break;
 			case 'i':
 				in = 1;
-				fdIn = get_file_Descriptor(optarg, in);
+				fdIn = get_file_descriptor(optarg, in);
 				break;
 			case 'o':
 				in = 0;
-				fdOut = get_file_Descriptor(optarg, in);
+				fdOut = get_file_descriptor(optarg, in);
 				break;
 			case 'h':
 				print_help();

@@ -1,417 +1,178 @@
-#base64_encode
+#include <mips/regdef.h>
+#include <sys/syscall.h>
 
-.text
-.align 	2
-.globl	base64_encode
-.ent	base64_encode
+					.data  
+					bufferr:  .space 75	# 4500 bytes para el buffer de lectura
+					bufferw:  .space 76	# 4560 bytes para el buffer de escritura
+					diction:  .asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+					p:		  .asciiz "="
 
-base64_encode:			#int base64_encode(int infd, int outfd)
-.set	noreorder
-.cpload	$t9
-.set	reorder
-subu	$sp, $sp, 48	#1 para gp, 1 para fp, 1 para ra, 1 para a0, 1 para a1 y 7 extra
-sw		$gp, 40($sp)
-sw		$fp, 36($sp)
-sw		$ra, 32($sp)
-move	$fp, $sp
-sw		$a0, 48($fp)	#File descriptor de entrada
-sw		$a1, 44($fp)	#File descriptor de salida
-lw		$a0, 48($fp)
-addu	$a1, $fp, 16	#Buffer de 16($fp) a 28($fp) tamaño 12
-li		$a2, 12
-la		$t9, read
-jal		$ra, $t9
-li		$a0, 1			#Encode = 1
-addu	$a1, $fp, 16
-move	$a2, v0
-lw		$a3, 44($fp)
-la		$t9, process
-jal		$ra, $t9
-lhu		$v0, __sF+12	#Revisar esto
-srl		$v0, $v0,5
-andi	$v0, $v0, 0x1
-beq		$v0, $zero, base64_encode
-move	$sp, $fp
-lw		$gp, 40($sp)
-lw		$fp, 36($sp)
-lw		$ra, 32($sp)
-addu	$sp, $sp, 48
-j		$ra
-.end	base64_encode
+					.text
+					.align 2
+					.globl base64_encode
+					.ent base64_encode
+					# Se crea el SRA 16 y LTA 0 y ABA 0 = 16 bytes
+base64_encode:		subu sp, sp, 16 
+					sw ra, 8(sp)
+			        sw $fp, 4(sp)
+			        sw gp, 0(sp)
+			        move $fp, sp
 
-#base64_decode
+			        # Se guardan los file descriptors en valores s
+			        move s1, a0 # FD in
+			        move s2, a1 # FD out
 
-.text
-.align 	2
-.globl	base64_encode
-.ent	base64_encode
+			        # Trae la informacion
+			        b readIntoBuffer
 
-base64_decode:			#int base64_decode(int infd, int outfd)
-.set	noreorder
-.cpload	$t9
-.set	reorder
-subu	$sp, $sp, 48	#1 para gp, 1 para fp, 1 para ra, 1 para a0, 1 para a1 y 7 extra
-sw		$gp, 40($sp)
-sw		$fp, 36($sp)
-sw		$ra, 32($sp)
-move	$fp, $sp
-sw		$a0, 48($fp)	#File descriptor de entrada
-sw		$a1, 44($fp)	#File descriptor de salida
-lw		$a0, 48($fp)
-addu	$a1, $fp, 16	#Buffer de 16($fp) a 28($fp) tamaño 12
-li		$a2, 12
-la		$t9, read
-jal		$ra, $t9
-li		$a0, 0			#Encode = 0
-addu	$a1, $fp, 16
-move	$a2, v0
-lw		$a3, 44($fp)
-la		$t9, process
-jal		$ra, $t9
-lhu		$v0, __sF+12	#Revisar esto
-srl		$v0, $v0,5
-andi	$v0, $v0, 0x1
-beq		$v0, $zero, base64_encode
-move	$sp, $fp
-lw		$gp, 40($sp)
-lw		$fp, 36($sp)
-lw		$ra, 32($sp)
-addu	$sp, $sp, 48
-j		$ra
-.end	base64_encode
+inicio:				add t0, zero, zero # el puntero del bufferr va en 0
+					add t6, zero, zero # el puntero del bufferw va en 0
+					add t4, zero, zero # el indicador de fin de input va en 0
 
-#process
+					# si va un mult de 75 bytes, pone un fin de linea en el 76 
+for_loop:			beqz t6, inicializar
+					addi t2, zero, 76 # t2 <- 76
+					remu t1, t6, t2 # busco el resto de dividirlo por 76
+					bnez t1, inicializar # si no da 0, continua
+					addi t1, zero, 10 # guarda un \n
+					la t2, bufferw # trae la direccion del bufferw
+					addu t2, t2, t6 # le sumo el offset
+					sb t1, 0(t2) # pone el fin de linea en el bufferw
+					addi t6, t6, 1 # avanza el puntero de bufferw
 
-.text
-.align	2
-.ent	process
+					# inicializa en cero 
+inicializar:		add t1, zero, zero
+					add t2, zero, zero
+					add t3, zero, zero
 
-process:				#void process(int encode, char* buffer, size_t amount, int outfd)
-.set	noreorder
-.cpload	$t9
-.set	reorder
-subu	$sp, $sp, 24	#gp, fp, ra, a0, a1, a2 y a3
-sw		$gp, 8($sp)
-sw		$fp, 4($sp)
-sw		$ra, 0($sp)
-move	$fp, $sp
-sw		$a0, 24($fp)
-sw		$a1, 20($fp)
-sw		$a2, 16($fp)
-sw		$a3, 12($fp)
-subu	$t1, $a0, 1
-move	$a0, $a1
-move	$a1, $a2
-move	$a2, $a3
-beqz	$t1, encode64
-la		$t9, decode64
-jal		$ra, $t9
-move	$sp, $fp
-lw		$gp, 8($sp)
-lw		$fp, 4($sp)
-lw		$ra, 0($sp)
-addu	$sp, $sp, 20
-j		$ra
-.end	process
+					# lee del buffer
+					la t1, bufferr # trae la direccion del bufferr
+					addu t1, t1, t0 # le sumo el offset
+					lb t1, 0(t1) # t1 <- byte en bufferr
+					beqz t1, escribirArchivo # directamente va a escribir el archivo
+					addi t0, t0, 1 # avanza el puntero del bufferr
 
-#encode64
+					la t2, bufferr # trae la direccion del bufferr
+					addu t2, t2, t0 # le sumo el offset
+					lb t2, 0(t2) # t2 <- byte en bufferr
+					addi t4, zero, 1 # flag en 1
+					beqz t2, terminoinput
+					addi t0, t0, 1 # avanza el puntero del bufferr
 
-.text
-.align	2
-.ent	encode64
-encode64:				#void encode64(char * const input, size_t amount, int outfd)
-.set	noreorder
-.cpload	$t9
-.set	reorder
-subu	$sp, $sp, 32	#gp, fp, ra, a0 = input, a1 = amount, a2 = outfd, t1 = i, t2 = j, t3 = aChar
-sw		$gp, 20($sp)
-sw		$fp, 16($sp)
-sw		$ra, 12($sp)
-move	$fp, $sp
-sw		$a0, 32($fp)
-sw		$a1, 28($fp)
-sw		$a2, 24($fp)
-move	$t1, $zero
-sw		$t1, 8($fp)
+					la t3, bufferr # trae la direccion del bufferr
+					addu t3, t3, t0 # le sumo el offset
+					lb t3, 0(t3) # t3 <- byte en bufferr
+					add t4, zero, zero # flag en 0
+					beqz t3, terminoinput
+					addi t0, t0, 1 # avanza el puntero del bufferr
 
-$for1_encode64:
-lw		$t1, 8($fp)
-lw		$a1, 28($fp)
-sltu	$v0, $t1, $a1
-beqz	$v0, $end_encode64
-lw		$a0, 32($fp)
-addu	$t3, $a0, $t1
-lbu		$t3, 0($t3)
-sb		$t3, 0($fp)
-li		$t2, 7			#DECODE_SIZE - 1 = 8 - 1 = 7
-sw		$t2, 4($fp)
+					b operar
 
-$L1
-lw		$t2, 4($fp)
-bgez	$t2, $L2
-lw		$t1, 8($fp)
-addu	$t1, $t1, 1
-sw		$t1, 8($fp)
-b		$for1_encode64
+terminoinput: 		addi t4, t4, 1 # se indica que termino el input y la cant de bits a rellenar
 
-$L2
-lw		$t2, 4($fp)
-lw		$t3, 0($fp)
-sra		$t4, $t3, $t2
-andi	$t4, $t4, 0x1
-move	$a0, $t4
-lw		$a1, 24($fp)
-la		$t9, doEncode
-jal		$ra, $t9
-lw		$t2, 4($fp)
-subu	$t2, $t2, 1
-sw		$t2, 4($fp)
-b		$L1
+					# se opera
+operar:				addi t5, zero, 16
+					sll t1, t1, t5
+					add t3, t3, t1 # <- t3 = t1 + t3
+					addi t5, zero, 8
+					sll t2, t5
+					add t3, t3, t2 # <- n = t1 + t2 + t3
 
-$end_encode64:
-move	$sp, $fp
-lw		$gp, 20($sp)
-lw		$fp, 16($sp)
-lw		$ra, 12($sp)
-addu	$sp, $sp, 32
-j		$ra
-.end	encode64
+					addi t5, zero, 18 # t5 <- 18
+					srl t1, t3, t5
+					andi t1, t1, 63 # n1
 
-.globl	count
-.globl	count
-.section	.bss
-.align	2
-.type	count, @object
-.size	count, 4
-count:
-.space	4
+					addi t5, zero, 12 # t5 <- 12
+					srl t2, t3, t5
+					andi t2, t2, 63 # n2
 
-.globl	linecount
-.globl	linecount
-.align	2
-.type	linecount, @object
-.size	linecount, 4
-linecount:
-.space	4
+					addi t5, zero, 6 # t5 <- 6
+					srl t5, t3, t5
+					andi t5, t5, 63 # n3
 
-.globl	acum
-.globl	acum
-.align	2
-.type	acum, @object
-.size	acum, 4
-acum:
-.space	4
+					andi t3, t3, 63 # n4
 
-.globl	length
-.globl	length
-.align	2
-.type	length, @object
-.size	length, 4
-length:
-.space	4
+					# busca los indices en el alfabeto y los escribe en el bufferw
+					la t7, diction # trae la direccion del diccionario
+					addu t7, t7, t1 # le suma el offset
+					lb t7, 0(t7) # trae el byte correspondiente
+					la t1, bufferw # trae la direccion de bufferw
+					addu t1, t1, t6 # le suma el offset
+					sb t7, 0(t1) # guarda el byte en bufferw
+					addi t6, t6, 1 # se avanza el puntero de escritura
 
-.rdata
-.align	2
-$ALPHABET:
-.ascii	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123"
-.ascii	"456789+/\000"
-	
-#doEncode
+					la t7, diction # trae la direccion del diccionario
+					addu t7, t7, t2 # le suma el offset
+					lb t7, 0(t7) # trae el byte correspondientet6
+					la t1, bufferw # trae la direccion de bufferw
+					addu t1, t1, t6 # le suma el offset
+					sb t7, 0(t1) #guarda el byte en bufferw
+					addi t6, t6, 1 # se avanza el puntero de escritura
 
-.text
-.align	2
-.ent	doEncode
-doEncode:				#void doEncode(int value, int outfd)
-.set	noreorder
-.cpload $t9
-.set	reorder
-subu	$sp, $sp, 16	#gp, fp, ra, a0 = value, a1 = outfd, t1 = count, t2 = linecount, t3 = acum, t4 = length
-sw		$gp, 8($sp)
-sw		$fp, 4($sp)
-sw		$ra, 0($sp)
-move	$fp, $sp
-sw		$a0, 16($fp)
-sw		$a1, 12($fp)
-lw		$t1, count
-subu	$t1, $t1, 1
-sw		$t1, count
-lw		$v0, acum
-sll		$t3, v0, 1
-or		$t3, $t3, $a0
-sw		$t3, acum
-li		$v0, 6			#ENCODE_SIZE = 6
-beq		$t1, $v0, L3
-b		$end_doEncode
+					bnez t5, notZero1 # Se fija si es un cero, entonces va un char de padding
+					la t7, p # Trae la dir de padding
+					lb t7, 0(t7) # Trae el caracter "="
+					b write1
+notZero1:			la t7, diction # trae la direccion del diccionario
+					addu t7, t7, t5 # le suma el offset
+					lb t7, 0(t7) # trae el byte correspondiente
+write1:				la t1, bufferw # trae la direccion de bufferw
+					addu t1, t1, t6 # le suma el offset
+					sb t7, 0(t1) #guarda el byte en bufferw
+					addi t6, t6, 1 # se avanza el puntero de escritura
 
-$L3:
-lw		$t2, linecount
-addu	$t2, $t2, 1
-sw		$t2, linecount
-lw		$t4, length
-addu	$t4, $t4, 1
-sw		$t4, length
-lw		$t3, acum
-la		$v0, $ALPHABET
-addu	$v0, $v0, $t3	#Revisar esto. Puede que sea al reves
-lw		$a0, 12($fp)
-move	$a1, v0
-li		$a2, 1
-la		$t9, write
-jal		$ra, $t9
-lw		$t2, linecount
-li		$v0, 76
-beq		$t2, $v0, $L4
-b		$end_doEncode
+					bnez t3, notZero2 # Se fija si es un cero, entonces va un char de padding
+					la t7, p # Trae la dir de padding
+					lb t7, 0(t7) # Trae el caracter "="
+					b write2
+notZero2:			la t7, diction # trae la direccion del diccionario
+					addu t7, t7, t3 # le suma el offset
+					lb t7, 0(t7) # trae el byte correspondiente
+write2:				la t1, bufferw # trae la direccion de bufferw
+					addu t1, t1, t6 # le suma el offset
+					sb t7, 0(t1) #guarda el byte en bufferw
+					addi t6, t6, 1 # se avanza el puntero de escritura
 
-$L4:
-lw		$a0, 12($fp)
-li		$a1, 10
-li		$a2, 1
-la		$t9, write
-jal		$ra, $t9
-sw		$zero, linecount
-sw		$zero, count
-sw		$zero, acum
+					# se fija si hay que vaciar buffer
+					addi t7, zero, 75 # si lleno el bufer de escritura, lo guarda
+					beq t0, t7, escribirArchivo # se escribe el bufferw
+					addi t7, zero, 1 # si se termino la entrada de datos, lo guarda
+					beq t4, t7, escribirArchivo # se escribe el bufferw
 
-$end_doEncode:
-move	$sp, $fp
-lw		$gp, 8($sp)
-lw		$fp, 4($sp)
-lw		$ra, 0($sp)
-addu	$sp, $sp, 12
-j		$ra
-.end	doEncode
+continuefor:		b for_loop
 
-#decode64
+					# Read to file opened
+readIntoBuffer:		li   v0, 3       # system call for read to file
+					move a0, s1      # file descriptor 
+					la   a1, bufferr   # address of buffer from which to read
+					addi t0, t0, 75
+					move   a2, t0       # buffer length
+					syscall            # write to file
 
-.text
-.align	2
-.ent	decode64
-decode64:				#void decode64(char * const input, size_t amount, int outfd)
-.set	noreorder
-.cpload	$t9
-.set	reorder
-subu	$sp, $sp, 32	#gp, fp, ra, a0 = input, a1 = amount, a2 = outfd, t1 = i, t2 = j, t3 = aChar
-sw		$gp, 20($sp)
-sw		$fp, 16($sp)
-sw		$ra, 12($sp)
-move	$fp, $sp
-sw		$a0, 32($fp)
-sw		$a1, 28($fp)
-sw		$a2, 24($fp)
-li		$t1, 0
-sw		$t1, 8($fp)
+					# Reset buffers
+					add t0, zero, zero # el puntero del bufferr va en 0
+					add t6, zero, zero # el puntero del bufferw va en 0
 
-$for1_decode64:
-lw		$t1, 8($fp)
-lw		$a1, 28($fp)
-sltu	$v0, $t1, $a1
-lw		$a0, 32($fp)
-addu	$v1, $a0, $t1
-lbu		$v1, 0($v1)
-li		$t4, 61
-sne		$v1, $v1, $t4
-and		$v0, $v0, $v1
-beqz	$v0, $end_decode64
+					b for_loop
 
-$for1_decode64_cond_ok:
-lw		$t1, 8($fp)
-lw		$a0, 32($fp)
-addu	$v1, $a0, $t1
-lbu		$v1, 0($v1)
-li		$t4, 10
-bne		$v1, $t4, $if1_decode64
-b		$for1_decode64_cont
+					# Write to file opened
+escribirArchivo:	li   v0, 4       # system call for write to file
+					move a0, s2      # file descriptor 
+					la   a1, bufferw   # address of buffer from which to write
+					move   a2, t6       # buffer length
+					syscall            # write to file
+					beqz t4, readIntoBuffer # si no llego el fin del input, busca mas datos
 
-$if1_decode64:
-lw		$t1, 8($fp)
-lw		$a0, 32($fp)
-addu	$v0, $a0, $t1
-lbu		$a0, 0($v0)
-la		$t9, indexOf
-jal		$ra, $t9
-move	$t3, $v0
-sw		$t3, 0($fp)
-li		$t2, 5
-sw		$t2, 4($fp)
+					# Close the file 
+cerrarArchivo:		li   v0, 6       # system call for close file
+					move a0, s6      # file descriptor to close
+					syscall            # close file
 
-$for2_decode64:
-lw		$t2, 4($fp)
-bltz	$t2, $for1_decode64_cont
-lw		$t3, 0($fp)
-srl		$v0, $t3, $t2
-andi	$a0, $v0, 0x1
-lw		$a1, 24($fp)
-la		$t9, doDecode
-jal		$ra, $t9
-lw		$t2, 4($fp)
-subu	$t2, $t2, 1
-sw		$t2, 4($fp)
-b		$for2_decode64
+					# Sale de la funcion
+salir:				lw ra, 8(sp)
+			        lw $fp, 4(sp)
+		        	lw gp, 0(sp)
+		        	addu sp, sp, 16
+					j ra
+					.end base64_encode
 
-$for1_decode64_cont:
-lw		$t1, 8($fp)
-addu	$t1, $t1, 1
-sw		$t1, 8($fp)
-b		$for1_decode64
-
-
-$end_for1_decode64:
-lw		$t1, 8($fp)
-addu	$t1, $t1, 1
-sw		$t1, 8($fp)
-b		$for1_decode64
-
-$end_decode64:
-move	$sp, $fp
-lw		$gp, 20($sp)
-lw		$fp, 16($sp)
-lw		$ra, 12($sp)
-addu	$sp, $sp, 32
-j		$ra
-.end	decode64
-
-#doDecode
-
-.text
-.align	2
-.ent	doDecode
-doDecode:				#void doDecode(int value, int outfd)
-.set	noreorder
-.cpload $t9
-.set	reorder
-subu	$sp, $sp, 16	#gp, fp, ra, a0 = value, a1 outfd
-sw		$gp, 8($sp)
-sw		$fp, 4($sp)
-sw		$ra, 0($sp)
-move	$fp, $sp
-sw		$a0, 16($fp)
-sw		$a1, 12($fp)
-lw		$v0, acum
-sll		$v0, $v0, 1
-or		$v0, $v0, $a0
-sw		$v0, acum
-lw		$v1, count
-addu	$v1, $v1, 1
-sw		$v1, count
-li		$t1, 8
-bne		$v1, $t1, $end_doDecode
-lw		$v1, length
-addu	$v1, $v1, 1
-sw		$v1, length
-move	$a0, $a1
-move	$a1, $v0
-li		$a2, 1
-la		$t9, write
-jal		$ra, $t9
-move	acum, $zero
-move	count, $zero
-
-$end_doDecode:
-move	$sp, $fp
-lw		$gp, 8($sp)
-lw		$fp, 4($sp)
-lw		$ra, 0($sp)
-addu	$sp, $sp, 16
-j		$ra
-.end	doDecode
