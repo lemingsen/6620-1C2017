@@ -9,7 +9,15 @@
 					diction:	.asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 					p:			.asciiz "="
 					a:			.asciiz "A"
-					errmsg:     .asciiz "Error: input.txt.\n", "Error: output.txt.\n", "Error: decode and encode selected.\n", "Option -%c requires an argument.\n", "Unknown option character\n"
+					error0:     .asciiz "Error: input.txt.\n"
+					error1:     .asciiz "Error: output.txt.\n"
+					error2:     .asciiz "Error: decode and encode selected.\n"
+					error3:     .asciiz "Option -%c requires an argument.\n"
+					error4:     .asciiz "Unknown option character\n"
+					error5:		.asciiz "Error: fin diccionario\n"
+					error6:		.asciiz "Error: error de lectura"
+					.extern errmsg 6
+					errmsg:     .word error0, error1, error2, error3, error4, error5, error6
 					tamdict:	.byte 63 # Tamanio del diccionario - 1
 					bufferb: 	.space 5 # Buffer de busqueda en diccionario
 					bufferi:	.space 4 # Buffer de indices encontrador
@@ -371,9 +379,17 @@ read_into_buffer_d:	li   v0, 3       # system call for read to file
 
 					b for_loop_d
 
-error_fin_dic_d:	b cerrar_archivo_d 
+error_fin_dic_d:	la $a0, errmsg
+					lw $a0, 20($a0)
+					li $v0, 4
+					syscall
+					b cerrar_archivo_d 
 
-error_lectura_d:	b cerrar_archivo_d 
+error_lectura_d:	la $a0, errmsg
+					lw $a0, 24($a0)
+					li $v0, 4
+					syscall
+					b cerrar_archivo_d 
 
 					# Write to file opened
 escribir_archivo_d:	li   v0, 4       # system call for write to file
