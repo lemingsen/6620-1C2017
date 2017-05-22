@@ -2,14 +2,15 @@
 #include <sys/syscall.h>
 
 					.data  
-					bufferr:	.space 75	# 4500 bytes para el buffer de lectura (r)
+					bufferr:	.space 76	# 4500 bytes para el buffer de lectura (r)
 					bufferw:	.space 76	# 4560 bytes para el buffer de escritura (w)
 					tbufr:		.word 75 # Tamanio del buffer de read
 					tbufw: 		.word 76 # Tamanio del buffer de write
 					diction:	.asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 					p:			.asciiz "="
+					a:			.asciiz "A"
 					tamdict:	.byte 63 # Tamanio del diccionario - 1
-					bufferb: 	.space 4 # Buffer de busqueda en diccionario
+					bufferb: 	.space 5 # Buffer de busqueda en diccionario
 					bufferi:	.space 4 # Buffer de indices encontrador
 
 					.text
@@ -171,7 +172,7 @@ escribir_archivo_e:	li   v0, 4       # system call for write to file
 
 					# Close the file 
 cerrar_archivo_e:	li   v0, 6       # system call for close file
-					move a0, s6      # file descriptor to close
+					move a0, s2      # file descriptor to close
 					syscall            # close file
 
 					# Sale de la funcion
@@ -196,12 +197,12 @@ base64_decode:		subu sp, sp, 16
 			        move s1, a0 # FD in
 			        move s2, a1 # FD out
 
-			        # Trae la informacion
-			        b read_into_buffer_d
-
 inicio_d:			add t0, zero, zero # el puntero del bufferr va en 0
 					add t6, zero, zero # el puntero del bufferw va en 0
 					add t4, zero, zero # el indicador de fin de input va en 0
+
+			        # Trae la informacion
+			        b read_into_buffer_d
 
 					# inicializa en cero 
 for_loop_d:			add t1, zero, zero
@@ -214,7 +215,7 @@ for_loop_d:			add t1, zero, zero
 					addu t1, t1, t0 # le sumo el offset
 					lb t1, 0(t1) # t1 <- byte en bufferr
 					bnez t1, fin_linea_d # Si no termino el archivo, va a verificar fin de linea
-					addi t4, zero, 1 # Sino, pone el flag en 1 para avisar fin de archivo
+fin_archivo_d:		li t4, 1 # Sino, pone el flag en 1 para avisar fin de archivo
 					beqz t1, escribir_archivo_d # va a escribir el archivo
 fin_linea_d:		addi t2, zero, 10 # Char de fin de linea
 					bne t1, t2, leer_bufferb_d # Si no es un fin de linea, lee en buffer
@@ -223,12 +224,56 @@ fin_linea_d:		addi t2, zero, 10 # Char de fin de linea
 					# Carga en el bufferb el siguiente word de bufferr
 leer_bufferb_d:		la t1, bufferr # trae la direccion del bufferr
 					addu t1, t1, t0 # le sumo el offset
-					lw t1, 0(t1) # t1 <- word en bufferr
 					addi t0, t0, 4 # avanza el puntero del bufferr
-					sw t1, bufferb # Guarda el word en el bufferb
+					la t2, bufferb # Trae la direccion del bufferb
+					lb t3, 0(t1) # t1 <- byte en bufferr
+					sb t3, 0(t2) # Guarda el word en el bufferb
+					lb t3, 1(t1) # t1 <- byte en bufferr
+					sb t3, 1(t2) # Guarda el word en el bufferb
+					lb t3, 2(t1) # t1 <- byte en bufferr
+					sb t3, 2(t2) # Guarda el word en el bufferb
+					lb t3, 3(t1) # t1 <- byte en bufferr
+					sb t3, 3(t2) # Guarda el word en el bufferb
+
+					# Se fija si hay algun char de padding y lo reemplaza por 'A'
+					la t1, bufferb # Trae la direccion del buffer
+					lb t1, 0(t1) # Trae el primer byte
+					la t2, p # Trae el padding
+					lb t2, 0(t2) # Trae el char "="
+					bne t2, t1, verificar_sig_d # Compara con el byte de padding
+					la t2, a
+					lb t2, 0(t2)
+					la t1, bufferb # Trae la direccion del buffer
+					sb t2, 0(t1)
+verificar_sig_d:	la t1, bufferb # Trae la direccion del buffer
+					lb t1, 1(t1) # Trae el 2do byte
+					la t2, p # Trae el padding
+					lb t2, 0(t2) # Trae el char "="
+					bne t2, t1, verificar_sig_d1 # Compara con el byte de padding
+					la t2, a
+					lb t2, 0(t2)
+					la t1, bufferb # Trae la direccion del buffer
+					sb t2, 1(t1)
+verificar_sig_d1:	la t1, bufferb # Trae la direccion del buffer
+					lb t1, 2(t1) # Trae el 3er byte
+					la t2, p # Trae el padding
+					lb t2, 0(t2) # Trae el char "="
+					bne t2, t1, verificar_sig_d2 # Compara con el byte de padding
+					la t2, a
+					lb t2, 0(t2)
+					la t1, bufferb # Trae la direccion del buffer
+					sb t2, 2(t1)
+verificar_sig_d2:	la t1, bufferb # Trae la direccion del bufferdebe_escribir_d
+					lb t1, 3(t1) # Trae el 2do byte
+					la t2, p # Trae el padding
+					lb t2, 0(t2) # Trae el char "="
+					bne t2, t1, buscar_d # Compara con el byte de padding
+					la t2, a
+					lb t2, 0(t2)
+					la t1, bufferb # Trae la direccion del buffer
+					sb t2, 3(t1)
 
 					# Se busca en el diccionario los indices de los 4 char
-
 buscar_d:			add s5, zero, zero # Indice del bufferb
 inicio_buscar_d:	add t7, zero, zero # Indice del diccionario
 					la s4, bufferb # Direccion de bufferb
@@ -281,20 +326,27 @@ trae_indices:		la s4, bufferi # Direccion del bufferb (con los indices cargados)
 					addu t1, t1, t6 # Le suma el offset
 					sb t2, 0(t1) # Guarda el byte
 					addi t6, t6, 1 # Avanza el puntero
+					# Se fija si es un 0, utilizado para padding, para saltearlo
+					beqz t3, escribir_sig_d
 					la t1, bufferw # Trae la direccion de bufferw
 					addu t1, t1, t6 # Le suma el offset
 					sb t3, 0(t1) # Guarda el byte
 					addi t6, t6, 1 # Avanza el puntero
+					# Se fija si es un 0, utilizado para padding, para saltearlo
+escribir_sig_d:		beqz t5, debe_escribir_d
 					la t1, bufferw # Trae la direccion de bufferw
 					addu t1, t1, t6 # Le suma el offset
 					sb t5, 0(t1) # Guarda el byte
 					addi t6, t6, 1 # Avanza el puntero
 
 					# se fija si hay que vaciar buffer
-debe_escribir_d:	addi t7, zero, 75 # si lleno el bufer de escritura, lo guarda
-					beq t0, t7, escribir_archivo_d # se escribe el bufferw
-					addi t7, zero, 1 # si se termino la entrada de datos, lo guarda
-					beq t4, t7, escribir_archivo_d # se escribe el bufferw
+debe_escribir_d:	addi t7, t6, 3 # le suma 3 al tam actual del bufferw
+					la t2, tbufw # Tam del bufferw
+					lw t2, 0(t2) 
+					bge t7, t2, escribir_archivo_d # se escribe el bufferw
+					addi t4, zero, 1 # flag en 1
+					beq t6, s6, escribir_archivo_d # si ya escribio la linea se escribe el bufferw
+					add t4, zero, zero # flag en 0
 
 continue_for_d:		b for_loop_d
 
@@ -302,9 +354,15 @@ continue_for_d:		b for_loop_d
 read_into_buffer_d:	li   v0, 3       # system call for read to file
 					move a0, s1      # file descriptor 
 					la   a1, bufferr   # address of buffer from which to read
-					addi t0, t0, 75
+					addi t0, t0, 76
 					move   a2, t0       # buffer length
 					syscall            # write to file
+
+					move s6, v0 # Guardo la cantidad de bytes leidos
+					addi t0, zero, -1
+					beq s6, t0, error_lectura_d
+					divu s6, s6, 4
+					mul s6, s6, 3 # Cantidad de bytes a escribir
 
 					# Reset buffers
 					add t0, zero, zero # el puntero del bufferr va en 0
@@ -313,6 +371,8 @@ read_into_buffer_d:	li   v0, 3       # system call for read to file
 					b for_loop_d
 
 error_fin_dic_d:	b cerrar_archivo_d 
+
+error_lectura_d:	b cerrar_archivo_d 
 
 					# Write to file opened
 escribir_archivo_d:	li   v0, 4       # system call for write to file
@@ -324,7 +384,7 @@ escribir_archivo_d:	li   v0, 4       # system call for write to file
 
 					# Close the file 
 cerrar_archivo_d:	li   v0, 6       # system call for close file
-					move a0, s6      # file descriptor to close
+					move a0, s2      # file descriptor to close
 					syscall            # close file
 
 					# Sale de la funcion
