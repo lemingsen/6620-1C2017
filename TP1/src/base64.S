@@ -9,10 +9,11 @@
 					diction:	.asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 					p:			.asciiz "="
 					a:			.asciiz "A"
+					errmsg:     .asciiz "Error: input.txt.\n", "Error: output.txt.\n", "Error: decode and encode selected.\n", "Option -%c requires an argument.\n", "Unknown option character\n"
 					tamdict:	.byte 63 # Tamanio del diccionario - 1
 					bufferb: 	.space 5 # Buffer de busqueda en diccionario
 					bufferi:	.space 4 # Buffer de indices encontrador
-
+					
 					.text
 					.align 2
 					.globl base64_encode

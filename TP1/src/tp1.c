@@ -31,7 +31,7 @@ int main(int argc,  char* const* argv)
 	if (fpIn != NULL)
 		fdIn = fileno(fpIn);
 	else {
-		fprintf(stderr, "Error: input_decode.txt.\n");
+		fprintf(stderr, errmsg[0]);
 		exit(1);
 	}
 
@@ -39,7 +39,7 @@ int main(int argc,  char* const* argv)
 	if (fpOut != NULL)
 		fdOut = fileno(fpOut);
 	else {
-		fprintf(stderr, "Error: output_decode.txt.\n");
+		fprintf(stderr, errmsg[1]);
 		exit(1);
 	}
 
