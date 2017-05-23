@@ -11,10 +11,16 @@ int do_action(int encode, int fdIn, int fdOut)
 
 	if (encode)
 		r = base64_encode(fdIn, fdOut);
-	//else
-		//r = base64_decode(fdIn, fdOut);
+	else
+		r = base64_decode(fdIn, fdOut);
 
 	return r;
+}
+
+void print_error(int errorNum){
+	char* c = errmsg[errorNum];
+	fprintf(stderr, "%s", c);
+	exit(EXIT_FAILURE);
 }
 
 void print_help() 
@@ -40,17 +46,8 @@ void print_version()
 	fprintf(stdout, "Version 1.0\n");
 }
 
-void throw_error_selection() 
+int get_file_descriptor(char* fileName, int in, FILE *fp) 
 {
-	fprintf(stderr, "Error: decode and encode selected.\n");
-	print_help();
-	exit(EXIT_FAILURE);
-}
-
-int get_file_descriptor(char* fileName, int in) 
-{
-	FILE *fp;
-
 	char* action = "w"; //Write
 	int fd = STDOUT_FILENO; //Out file
 
@@ -80,6 +77,10 @@ int main(int argc,  char* const* argv)
 
 	int fdIn = STDIN_FILENO;
 	int fdOut = STDOUT_FILENO;
+	FILE *fpIn = NULL;
+	FILE *fpOut = NULL;
+	
+	int r = 0;
 
 	/* Una cadena que lista las opciones cortas válidas */
 	const char* const opcionesCortas = "a:i:o:vh";
@@ -107,16 +108,16 @@ int main(int argc,  char* const* argv)
 					else if (strcmp(optarg, dec) == 0)
 						encode = 0;
 					else
-						throw_error_selection();
+						print_error(2);
 				}
 				break;
 			case 'i':
 				in = 1;
-				fdIn = get_file_descriptor(optarg, in);
+				fdIn = get_file_descriptor(optarg, in, fpIn);
 				break;
 			case 'o':
 				in = 0;
-				fdOut = get_file_descriptor(optarg, in);
+				fdOut = get_file_descriptor(optarg, in, fpOut);
 				break;
 			case 'h':
 				print_help();
@@ -126,18 +127,27 @@ int main(int argc,  char* const* argv)
 				exit(EXIT_SUCCESS);
 			case '?':
 				if (optopt == 'i' || optopt == 'o' || optopt == 'a')
-					fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+					print_error(3);
 				else
-					fprintf (stderr, "Unknown option character\n");
-				print_help();
-				exit(EXIT_FAILURE);
+					print_error(4);
 			default:
 				abort();
 		}
 	}
     
     //Se llama a la accion
-    do_action(encode, fdIn, fdOut);
+    r = do_action(encode, fdIn, fdOut);
 
+	//Se fija si hay mensaje de error y lo imprime
+	if (r != 0) {
+		print_error(r);
+	}
+	
+	//Cierra los archivos utilizados
+	if (fpIn != NULL)
+		fclose(fpIn);
+	if (fpOut != NULL)
+		fclose(fpOut);
+	
 	return 0;
 }
