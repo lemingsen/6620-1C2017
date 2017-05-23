@@ -3,9 +3,10 @@
 
 					.data  
 					.align 2
-					bufferr:	.space 75	# 75 bytes para el buffer de lectura (r)
+					bufferr:	.space 76	# 75 bytes para el buffer de lectura (r)
 					bufferw:	.space 76	# 76 bytes para el buffer de escritura (w)
 					tbufr:		.word 75 	# Tamanio del buffer de read
+					tbufrd:		.word 76 	# Tamanio del buffer de read
 					tbufw: 		.word 76 	# Tamanio del buffer de write
 					diction:	.asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 					p:			.asciiz "="
@@ -212,6 +213,10 @@ escribir_archivo_e:	li v0, SYS_write	# system call for write to file
 					addi t1, zero, -1
 					beq t2, t1, error_escritura_e # Si da -1 es un error
 					
+					# Si esta el flag de fin de input, se va
+					li v0, 0
+					bnez s4, salir_encode
+
 					# Reset buffer
 					add s3, zero, zero # el puntero del bufferw va en 0
 
@@ -278,6 +283,7 @@ fin_linea_d:		addi t2, zero, 10 # Char de fin de linea
 leer_bufferb_d:		la t1, bufferr # trae la direccion del bufferr
 					addu t1, t1, s0 # le sumo el offset
 					addi s0, s0, 4 # avanza el puntero del bufferr
+
 					la t2, bufferb # Trae la direccion del bufferb
 					lb t3, 0(t1) # t1 <- byte en bufferr
 					sb t3, 0(t2) # Guarda el word en el bufferb
@@ -400,7 +406,7 @@ debe_escribir_d:	addi t7, s1, 3 # se fija si hay 3 lugares mas (3 char)
 					bnez s2, escribir_archivo_d # Mira el flag 
 
 					# Se fija si hay que leer mas info
-debe_leer_d:		la t1, tbufr # Tam del bufferr
+debe_leer_d:		la t1, tbufrd # Tam del bufferr
 					lw t1, 0(t1)
 					bge s0, t1, leer_archivo_d # Se lee mas info
 					
@@ -417,8 +423,8 @@ leer_archivo_d:		li v0, SYS_read		# system call for read to file
 					lw t1, 8($fp) 		# Trae el file descriptor
 					move a0, t1			# file descriptor 
 					la a1, bufferr		# address of buffer from which to read
-					la s0, tbufr
-					lw s0, 0(s0)		# tam bufferr
+					la s0, tbufrd		# tam bufferr
+					lw s0, 0(s0)
 					move a2, s0			# buffer length
 					syscall				# read from file
 
@@ -453,6 +459,10 @@ escribir_archivo_d:	li v0, SYS_write	# system call for write to file
 					
 					# Reset buffer
 					add s1, zero, zero # el puntero del bufferw va en 0
+
+					# Si esta el flag de fin de input, se va
+					li v0, 0
+					bnez s6, salir_decode
 
 					b debe_leer_d
 
