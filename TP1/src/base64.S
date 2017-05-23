@@ -2,26 +2,26 @@
 #include <sys/syscall.h>
 
 					.data  
-					bufferr:	.space 76	# 4500 bytes para el buffer de lectura (r)
+					bufferr:	.space 75	# 4500 bytes para el buffer de lectura (r)
 					bufferw:	.space 76	# 4560 bytes para el buffer de escritura (w)
 					tbufr:		.word 75 # Tamanio del buffer de read
 					tbufw: 		.word 76 # Tamanio del buffer de write
 					diction:	.asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 					p:			.asciiz "="
 					a:			.asciiz "A"
-					error0:     .asciiz "Error: input.txt.\n"
-					error1:     .asciiz "Error: output.txt.\n"
-					error2:     .asciiz "Error: decode and encode selected.\n"
-					error3:     .asciiz "Option -%c requires an argument.\n"
-					error4:     .asciiz "Unknown option character\n"
-					error5:		.asciiz "Error: fin diccionario\n"
-					error6:		.asciiz "Error: error de lectura"
-					.extern errmsg 6
-					errmsg:     .word error0, error1, error2, error3, error4, error5, error6
 					tamdict:	.byte 63 # Tamanio del diccionario - 1
 					bufferb: 	.space 5 # Buffer de busqueda en diccionario
 					bufferi:	.space 4 # Buffer de indices encontrador
-					
+					error0: .asciiz "Error: input.txt.\n"
+					error1: .asciiz "Error: output.txt.\n"
+					error2: .asciiz "Error: decode and encode selected.\n"
+					error3: .asciiz "Option -%c requires an argument.\n"
+					error4: .asciiz "Unknown option character\n"
+					error5: .asciiz "Error: fin diccionario\n"
+					error6: .asciiz "Error: error de lectura"
+					.extern errmsg 6
+					errmsg: .word error0, error1, error2, error3, error4, error5, error6
+
 					.text
 					.align 2
 					.globl base64_encode
@@ -38,14 +38,14 @@ base64_encode:		subu sp, sp, 16
 			        move s1, a0 # FD in
 			        move s2, a1 # FD out
 
-			        # Trae la informacion
-			        b read_into_buffer_e
-
 inicio_e:			add t0, zero, zero # el puntero del bufferr va en 0
 					add t6, zero, zero # el puntero del bufferw va en 0
 					add t4, zero, zero # el indicador de fin de input va en 0
 
-					# si va un mult de 75 bytes, pone un fin de linea en el 76 
+			        # Trae la informacion
+			        b leer_archivo_e
+
+					# si va escribiendo 76 bytes, pone un fin de linea
 for_loop_e:			beqz t6, inicializar_e
 					addi t2, zero, 76 # t2 <- 76
 					remu t1, t6, t2 # busco el resto de dividirlo por 76
@@ -65,26 +65,17 @@ inicializar_e:		add t1, zero, zero
 					la t1, bufferr # trae la direccion del bufferr
 					addu t1, t1, t0 # le sumo el offset
 					lb t1, 0(t1) # t1 <- byte en bufferr
-					beqz t1, escribir_archivo_e # directamente va a escribir el archivo
 					addi t0, t0, 1 # avanza el puntero del bufferr
 
 					la t2, bufferr # trae la direccion del bufferr
 					addu t2, t2, t0 # le sumo el offset
 					lb t2, 0(t2) # t2 <- byte en bufferr
-					addi t4, zero, 1 # flag en 1
-					beqz t2, termino_input_e
 					addi t0, t0, 1 # avanza el puntero del bufferr
 
 					la t3, bufferr # trae la direccion del bufferr
 					addu t3, t3, t0 # le sumo el offset
 					lb t3, 0(t3) # t3 <- byte en bufferr
-					add t4, zero, zero # flag en 0
-					beqz t3, termino_input_e
 					addi t0, t0, 1 # avanza el puntero del bufferr
-
-					b operar_e
-
-termino_input_e:	addi t4, t4, 1 # se indica que termino el input y la cant de bits a rellenar
 
 					# se opera
 operar_e:			addi t5, zero, 16
@@ -119,7 +110,7 @@ operar_e:			addi t5, zero, 16
 
 					la t7, diction # trae la direccion del diccionario
 					addu t7, t7, t2 # le suma el offset
-					lb t7, 0(t7) # trae el byte correspondientet6
+					lb t7, 0(t7) # trae el byte correspondiente
 					la t1, bufferw # trae la direccion de bufferw
 					addu t1, t1, t6 # le suma el offset
 					sb t7, 0(t1) #guarda el byte en bufferw
@@ -150,39 +141,60 @@ write2_e:			la t1, bufferw # trae la direccion de bufferw
 					addi t6, t6, 1 # se avanza el puntero de escritura
 
 					# se fija si hay que vaciar buffer
-debe_escribir_e:	addi t7, zero, 75 # si lleno el bufer de escritura, lo guarda
-					beq t0, t7, escribir_archivo_e # se escribe el bufferw
-					addi t7, zero, 1 # si se termino la entrada de datos, lo guarda
-					beq t4, t7, escribir_archivo_e # se escribe el bufferw
+debe_escribir_e:	addi t7, t6, 5 # se fija si hay 5 lugares mas (4 char y un fin de linea)
+					la t1, tbufw # Tam del bufferw
+					lw t1, 0(t1)
+					bgt t7, t1, escribir_archivo_e # se escribe el bufferw
+					bnez t4, escribir_archivo_e # Mira el flag 
+
+					# Se fija si hay que leer mas info
+debe_leer_e:		la t1, tbufr # Tam del bufferr
+					lw t1, 0(t1)
+					bge t0, t1, leer_archivo_e # Se lee mas info
+					# Se fija si son menos char de input, que pasen todos
+					bge s6, t1, continue_for_e # Leidos > tam bufferr
+					blt t0, s6, continue_for_e # Recorridos < Leidos
+					li t4, 1 # Flag de fin de archivo
+					b escribir_archivo_e # Se va a escribir el archivo
 
 continue_for_e:		b for_loop_e
 
 					# Read to file opened
-read_into_buffer_e:	li   v0, 3       # system call for read to file
+leer_archivo_e:		li v0, SYS_read    # system call for read to file
 					move a0, s1      # file descriptor 
 					la   a1, bufferr   # address of buffer from which to read
-					addi t0, t0, 75
+					la t0, tbufr
+					lw t0, 0(t0) # tam bufferr
 					move   a2, t0       # buffer length
-					syscall            # write to file
+					syscall            # read from file
 
-					# Reset buffers
+					move s6, v0 # Se trae la cantidad de bytes leidos
+					addi t1, zero, -1
+					beq s6, t1, error_lectura_e # Si da -1 es un error
+					beqz s6, termino_input_e # Si da 0 termino la entrada de datos
+
+					# Reset buffer
 					add t0, zero, zero # el puntero del bufferr va en 0
-					add t6, zero, zero # el puntero del bufferw va en 0
 
 					b for_loop_e
 
+termino_input_e:	li t4, 1 # se indica que termino el input
+					bgtz t6, escribir_archivo_e # Se va a escribir el buffer si debe
+					b salir_encode # Sino sale 
+
 					# Write to file opened
-escribir_archivo_e:	li   v0, 4       # system call for write to file
+escribir_archivo_e:	li   v0, SYS_write       # system call for write to file
 					move a0, s2      # file descriptor 
 					la   a1, bufferw   # address of buffer from which to write
 					move   a2, t6       # buffer length
 					syscall            # write to file
-					beqz t4, read_into_buffer_e # si no llego el fin del input, busca mas datos
 
-					# Close the file 
-cerrar_archivo_e:	li   v0, 6       # system call for close file
-					move a0, s2      # file descriptor to close
-					syscall            # close file
+					# Reset buffer
+					add t6, zero, zero # el puntero del bufferw va en 0
+
+					beqz t4, leer_archivo_e # si no llego el fin del input, busca mas datos
+
+error_lectura_e:	b salir_encode
 
 					# Sale de la funcion
 salir_encode:		lw ra, 8(sp)
@@ -211,7 +223,7 @@ inicio_d:			add t0, zero, zero # el puntero del bufferr va en 0
 					add t4, zero, zero # el indicador de fin de input va en 0
 
 			        # Trae la informacion
-			        b read_into_buffer_d
+			        b leer_archivo_d
 
 					# inicializa en cero 
 for_loop_d:			add t1, zero, zero
@@ -223,9 +235,6 @@ for_loop_d:			add t1, zero, zero
 					la t1, bufferr # trae la direccion del bufferr
 					addu t1, t1, t0 # le sumo el offset
 					lb t1, 0(t1) # t1 <- byte en bufferr
-					bnez t1, fin_linea_d # Si no termino el archivo, va a verificar fin de linea
-fin_archivo_d:		li t4, 1 # Sino, pone el flag en 1 para avisar fin de archivo
-					beqz t1, escribir_archivo_d # va a escribir el archivo
 fin_linea_d:		addi t2, zero, 10 # Char de fin de linea
 					bne t1, t2, leer_bufferb_d # Si no es un fin de linea, lee en buffer
 					addi t0, t0, 1 # Sino lo ignora y avanza el puntero del bufferr
@@ -349,60 +358,62 @@ escribir_sig_d:		beqz t5, debe_escribir_d
 					addi t6, t6, 1 # Avanza el puntero
 
 					# se fija si hay que vaciar buffer
-debe_escribir_d:	addi t7, t6, 3 # le suma 3 al tam actual del bufferw
-					la t2, tbufw # Tam del bufferw
-					lw t2, 0(t2) 
-					bge t7, t2, escribir_archivo_d # se escribe el bufferw
-					addi t4, zero, 1 # flag en 1
-					beq t6, s6, escribir_archivo_d # si ya escribio la linea se escribe el bufferw
-					add t4, zero, zero # flag en 0
+debe_escribir_d:	addi t7, t6, 5 # se fija si hay 5 lugares mas (4 char y un fin de linea)
+					la t1, tbufw # Tam del bufferw
+					lw t1, 0(t1)
+					bgt t7, t1, escribir_archivo_d # se escribe el bufferw
+					bnez t4, escribir_archivo_d # Mira el flag 
+
+					# Se fija si hay que leer mas info
+debe_leer_d:		la t1, tbufr # Tam del bufferr
+					lw t1, 0(t1)
+					bge t0, t1, leer_archivo_d # Se lee mas info
+					# Se fija si son menos char de input, que pasen todos
+					bge s6, t1, continue_for_d # Leidos > tam bufferr
+					blt t0, s6, continue_for_d # Recorridos < Leidos
+					li t4, 1 # Flag de fin de archivo
+					b escribir_archivo_d # Se va a escribir el archivo
 
 continue_for_d:		b for_loop_d
 
 					# Read to file opened
-read_into_buffer_d:	li   v0, 3       # system call for read to file
+leer_archivo_d:		li v0, SYS_read    # system call for read to file
 					move a0, s1      # file descriptor 
 					la   a1, bufferr   # address of buffer from which to read
-					addi t0, t0, 76
+					la t0, tbufr
+					lw t0, 0(t0) # tam bufferr
 					move   a2, t0       # buffer length
-					syscall            # write to file
+					syscall            # read from file
 
-					move s6, v0 # Guardo la cantidad de bytes leidos
-					addi t0, zero, -1
-					beq s6, t0, error_lectura_d
-					divu s6, s6, 4
-					mul s6, s6, 3 # Cantidad de bytes a escribir
+					move s6, v0 # Se trae la cantidad de bytes leidos
+					addi t1, zero, -1
+					beq s6, t1, error_lectura_d # Si da -1 es un error
+					beqz s6, termino_input_d # Si da 0 termino la entrada de datos
 
-					# Reset buffers
+					# Reset buffer
 					add t0, zero, zero # el puntero del bufferr va en 0
-					add t6, zero, zero # el puntero del bufferw va en 0
 
 					b for_loop_d
 
-error_fin_dic_d:	la $a0, errmsg
-					lw $a0, 20($a0)
-					li $v0, 4
-					syscall
-					b cerrar_archivo_d 
-
-error_lectura_d:	la $a0, errmsg
-					lw $a0, 24($a0)
-					li $v0, 4
-					syscall
-					b cerrar_archivo_d 
+termino_input_d:	li t4, 1 # se indica que termino el input
+					bgtz t6, escribir_archivo_d # Se va a escribir el buffer si debe
+					b salir_decode # Sino sale 
 
 					# Write to file opened
-escribir_archivo_d:	li   v0, 4       # system call for write to file
+escribir_archivo_d:	li   v0, SYS_write       # system call for write to file
 					move a0, s2      # file descriptor 
 					la   a1, bufferw   # address of buffer from which to write
 					move   a2, t6       # buffer length
 					syscall            # write to file
-					beqz t4, read_into_buffer_d # si no llego el fin del input, busca mas datos
 
-					# Close the file 
-cerrar_archivo_d:	li   v0, 6       # system call for close file
-					move a0, s2      # file descriptor to close
-					syscall            # close file
+					# Reset buffer
+					add t6, zero, zero # el puntero del bufferw va en 0
+
+					beqz t4, leer_archivo_d # si no llego el fin del input, busca mas datos
+
+error_fin_dic_d:	b salir_decode 
+
+error_lectura_d:	b salir_decode 
 
 					# Sale de la funcion
 salir_decode:		lw ra, 8(sp)
