@@ -3,11 +3,12 @@
 
 					.data  
 					.align 2
-					bufferr:	.space 76	# 75 bytes para el buffer de lectura (r)
-					bufferw:	.space 76	# 76 bytes para el buffer de escritura (w)
-					tbufr:		.word 75 	# Tamanio del buffer de read
+					bufferr:	.space 255	# 75 bytes para el buffer de lectura (r)
+					bufferw:	.space 255	# 76 bytes para el buffer de escritura (w)
+					tbufr:		.word 57 	# Tamanio del buffer de read
 					tbufrd:		.word 76 	# Tamanio del buffer de read
-					tbufw: 		.word 76 	# Tamanio del buffer de write
+					tbufw: 		.word 77 	# Tamanio del buffer de write
+					tbufwd:		.word 57 	# Tamanio del buffer de write
 					diction:	.asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 					p:			.asciiz "="
 					a:			.asciiz "A"
@@ -65,11 +66,13 @@ for_loop_e:			add t1, zero, zero
 					lb t1, 0(t1) # t1 <- byte en bufferr
 					addi s0, s0, 1 # avanza el puntero del bufferr
 
+					bge s0, s6, operar_e
 					la t2, bufferr # trae la direccion del bufferr
 					addu t2, t2, s0 # le sumo el offset
 					lb t2, 0(t2) # t2 <- byte en bufferr
 					addi s0, s0, 1 # avanza el puntero del bufferr
 
+					bge s0, s6, operar_e
 					la t3, bufferr # trae la direccion del bufferr
 					addu t3, t3, s0 # le sumo el offset
 					lb t3, 0(t3) # t3 <- byte en bufferr
@@ -162,7 +165,6 @@ debe_escribir_e:	addi t7, s3, 4 # se fija si hay 4 lugares mas (4 char)
 					lw t1, 0(t1)
 					bgt t7, t1, escribir_archivo_e # se escribe el bufferw
 					bnez s4, escribir_archivo_e # Mira el flag 
-
 					# Se fija si hay que leer mas info
 debe_leer_e:		la t1, tbufr # Tam del bufferr
 					lw t1, 0(t1)
@@ -275,15 +277,15 @@ for_loop_d:			add t1, zero, zero
 					la t1, bufferr # trae la direccion del bufferr
 					addu t1, t1, s0 # le sumo el offset
 					lb t1, 0(t1) # t1 <- byte en bufferr
-fin_linea_d:		addi t2, zero, 10 # Char de fin de linea
+fin_linea_d: 		addi t2, zero, 10 # Char de fin de linea
 					bne t1, t2, leer_bufferb_d # Si no es un fin de linea, lee en buffer
 					addi s0, s0, 1 # Sino lo ignora y avanza el puntero del bufferr
-
+					
 					# Carga en el bufferb el siguiente word de bufferr
-leer_bufferb_d:		la t1, bufferr # trae la direccion del bufferr
+leer_bufferb_d: 	la t1, bufferr # trae la direccion del bufferr
 					addu t1, t1, s0 # le sumo el offset
 					addi s0, s0, 4 # avanza el puntero del bufferr
-
+					
 					la t2, bufferb # Trae la direccion del bufferb
 					lb t3, 0(t1) # t1 <- byte en bufferr
 					sb t3, 0(t2) # Guarda el word en el bufferb
@@ -400,7 +402,7 @@ escribir_sig_d:		beqz t5, debe_escribir_d
 
 					# se fija si hay que vaciar buffer
 debe_escribir_d:	addi t7, s1, 3 # se fija si hay 3 lugares mas (3 char)
-					la t1, tbufw # Tam del bufferw
+					la t1, tbufwd # Tam del bufferw
 					lw t1, 0(t1)
 					bgt t7, t1, escribir_archivo_d # se escribe el bufferw
 					bnez s2, escribir_archivo_d # Mira el flag 
@@ -434,6 +436,14 @@ leer_archivo_d:		li v0, SYS_read		# system call for read to file
 					beq s6, t1, error_lectura_d # Si da -1 es un error
 					beqz s6, termino_input_d # Si da 0 termino la entrada de datos
 
+					li v0, SYS_read		# system call for read to file
+					lw t1, 8($fp) 		# Trae el file descriptor
+					move a0, t1			# file descriptor 
+					la a1, bufferi		# address of buffer from which to read
+					li s0, 1
+					move a2, s0			# buffer length
+					syscall				# read from file
+
 					# Reset buffer
 					add s0, zero, zero # el puntero del bufferr va en 0
 
@@ -462,7 +472,7 @@ escribir_archivo_d:	li v0, SYS_write	# system call for write to file
 
 					# Si esta el flag de fin de input, se va
 					li v0, 0
-					bnez s6, salir_decode
+					bnez s2, salir_decode
 
 					b debe_leer_d
 
