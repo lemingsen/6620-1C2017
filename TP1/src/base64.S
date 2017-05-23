@@ -463,9 +463,9 @@ error_fin_dic_d:	li v0, 5 # Trae el codigo de error
 					b salir_decode
 
 					# Sale de la funcion
-salir_decode:		lw ra, 8(sp)
-			        lw $fp, 4(sp)
-		        	lw gp, 0(sp)
-		        	addu sp, sp, 16
+salir_decode:		lw ra, 20(sp)
+			        lw $fp, 16(sp)
+		        	lw gp, 12(sp)
+		        	addu sp, sp, 24
 					j ra
 					.end base64_decode
