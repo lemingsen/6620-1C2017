@@ -4,34 +4,41 @@
 					.data  
 					bufferr:	.space 75	# 4500 bytes para el buffer de lectura (r)
 					bufferw:	.space 76	# 4560 bytes para el buffer de escritura (w)
-					tbufr:		.word 75 # Tamanio del buffer de read
-					tbufw: 		.word 76 # Tamanio del buffer de write
+					tbufr:		.word 75 	# Tamanio del buffer de read
+					tbufw: 		.word 76 	# Tamanio del buffer de write
 					diction:	.asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 					p:			.asciiz "="
 					a:			.asciiz "A"
-					tamdict:	.byte 63 # Tamanio del diccionario - 1
-					bufferb: 	.space 5 # Buffer de busqueda en diccionario
-					bufferi:	.space 4 # Buffer de indices encontrador
-					error0: .asciiz "Error: input.txt.\n"
-					error1: .asciiz "Error: output.txt.\n"
-					error2: .asciiz "Error: decode and encode selected.\n"
-					error3: .asciiz "Option -%c requires an argument.\n"
-					error4: .asciiz "Unknown option character\n"
-					error5: .asciiz "Error: fin diccionario\n"
-					error6: .asciiz "Error: error de lectura"
-					.extern errmsg 6
-					errmsg: .word error0, error1, error2, error3, error4, error5, error6
+					tamdict:	.byte 63 	# Tamanio del diccionario - 1
+					bufferb: 	.space 5 	# Buffer de busqueda en diccionario
+					bufferi:	.space 4 	# Buffer de indices encontrador
+					
+					error0: .asciiz "Error: open input file"
+					error1: .asciiz "Error: open output file"
+					error2: .asciiz "Error: decode and encode selected."
+					error3: .asciiz "Option -%c requires an argument."
+					error4: .asciiz "Unknown option character"
+					error5: .asciiz "Error: end of dictionary"
+					error6: .asciiz "Error: reading file"
+					error7: .asciiz "Error: writing file"
+					.extern errmsg 7
+					errmsg: .word error0, error1, error2, error3, error4, error5, error6, error7
 
 					.text
 					.align 2
 					.globl base64_encode
 					.ent base64_encode
 # BASE64_ENCODE
-					# Se crea el SRA 16 y LTA 0 y ABA 0 = 16 bytes
-base64_encode:		subu sp, sp, 16 
-					sw ra, 8(sp)
-			        sw $fp, 4(sp)
-			        sw gp, 0(sp)
+					# Se crea el SRA 16 y LTA 8 y ABA 0 = 24 bytes
+base64_encode:		.frame $fp, 24, ra
+					.set noreorder
+					.cpload t9
+					.set reorder
+					subu sp, sp, 24 
+					.cprestore 24
+					sw ra, 20(sp)
+			        sw $fp, 16(sp)
+			        sw gp, 12(sp)
 			        move $fp, sp
 
 			        # Se guardan los file descriptors en valores s
@@ -98,6 +105,14 @@ operar_e:			addi t5, zero, 16
 					andi t5, t5, 63 # n3
 
 					andi t3, t3, 63 # n4
+					
+					# Si alguno no esta en el diccionario, sale con error
+					la t7, tamdict
+					lw t7, 0(t7)
+					bgt t1, t7, error_fin_dic_e
+					bgt t2, t7, error_fin_dic_e
+					bgt t5, t7, error_fin_dic_e
+					bgt t3, t7, error_fin_dic_e
 
 					# busca los indices en el alfabeto y los escribe en el bufferw
 					la t7, diction # trae la direccion del diccionario
@@ -160,15 +175,16 @@ debe_leer_e:		la t1, tbufr # Tam del bufferr
 continue_for_e:		b for_loop_e
 
 					# Read to file opened
-leer_archivo_e:		li v0, SYS_read    # system call for read to file
-					move a0, s1      # file descriptor 
-					la   a1, bufferr   # address of buffer from which to read
+leer_archivo_e:		li v0, SYS_read		# system call for read to file
+					move a0, s1			# file descriptor 
+					la a1, bufferr		# address of buffer from which to read
 					la t0, tbufr
-					lw t0, 0(t0) # tam bufferr
-					move   a2, t0       # buffer length
-					syscall            # read from file
+					lw t0, 0(t0)		# tam bufferr
+					move a2, t0			# buffer length
+					syscall				# read from file
 
-					move s6, v0 # Se trae la cantidad de bytes leidos
+					sw v0, 4($fp) # Se guarda la cantidad de bytes leidos
+					lw s6, 4($fp) # Se trae a s6
 					addi t1, zero, -1
 					beq s6, t1, error_lectura_e # Si da -1 es un error
 					beqz s6, termino_input_e # Si da 0 termino la entrada de datos
@@ -180,38 +196,56 @@ leer_archivo_e:		li v0, SYS_read    # system call for read to file
 
 termino_input_e:	li t4, 1 # se indica que termino el input
 					bgtz t6, escribir_archivo_e # Se va a escribir el buffer si debe
+					li v0, 0 # Sin error
 					b salir_encode # Sino sale 
 
 					# Write to file opened
-escribir_archivo_e:	li   v0, SYS_write       # system call for write to file
-					move a0, s2      # file descriptor 
-					la   a1, bufferw   # address of buffer from which to write
-					move   a2, t6       # buffer length
-					syscall            # write to file
+escribir_archivo_e:	li v0, SYS_write	# system call for write to file
+					move a0, s2			# file descriptor 
+					la a1, bufferw		# address of buffer from which to write
+					move a2, t6			# buffer length
+					syscall				# write to file
 
+					sw v0, 0($fp) # Se guarda si da error
+					lw t2, 0($fp) # Se trae a t2
+					addi t1, zero, -1
+					beq t2, t1, error_escritura_e # Si da -1 es un error
+					
 					# Reset buffer
 					add t6, zero, zero # el puntero del bufferw va en 0
 
 					beqz t4, leer_archivo_e # si no llego el fin del input, busca mas datos
 
-error_lectura_e:	b salir_encode
+error_escritura_e:	li v0, 7 # Trae el codigo de error
+					b salir_encode
+
+error_lectura_e:	li v0, 6 # Trae el codigo de error
+					b salir_encode
+					
+error_fin_dic_e:	li v0, 5 # Trae el codigo de error
+					b salir_encode
 
 					# Sale de la funcion
-salir_encode:		lw ra, 8(sp)
-			        lw $fp, 4(sp)
-		        	lw gp, 0(sp)
-		        	addu sp, sp, 16
+salir_encode:		lw ra, 20(sp)
+			        lw $fp, 16(sp)
+		        	lw gp, 12(sp)
+		        	addu sp, sp, 24
 					j ra
 					.end base64_encode
 
 # BASE64_DECODE
 					.globl base64_decode
 					.ent base64_decode
-					# Se crea el SRA 16 y LTA 0 y ABA 0 = 16 bytes
-base64_decode:		subu sp, sp, 16 
-					sw ra, 8(sp)
-			        sw $fp, 4(sp)
-			        sw gp, 0(sp)
+					# Se crea el SRA 16 y LTA 8 y ABA 0 = 24 bytes
+base64_decode:		.frame $fp, 24, ra
+					.set noreorder
+					.cpload t9
+					.set reorder
+					subu sp, sp, 24 
+					.cprestore 24
+					sw ra, 20(sp)
+			        sw $fp, 16(sp)
+			        sw gp, 12(sp)
 			        move $fp, sp
 
 			        # Se guardan los file descriptors en valores s
@@ -358,7 +392,7 @@ escribir_sig_d:		beqz t5, debe_escribir_d
 					addi t6, t6, 1 # Avanza el puntero
 
 					# se fija si hay que vaciar buffer
-debe_escribir_d:	addi t7, t6, 5 # se fija si hay 5 lugares mas (4 char y un fin de linea)
+debe_escribir_d:	addi t7, t6, 3 # se fija si hay 3 lugares mas (3 char)
 					la t1, tbufw # Tam del bufferw
 					lw t1, 0(t1)
 					bgt t7, t1, escribir_archivo_d # se escribe el bufferw
@@ -368,8 +402,9 @@ debe_escribir_d:	addi t7, t6, 5 # se fija si hay 5 lugares mas (4 char y un fin 
 debe_leer_d:		la t1, tbufr # Tam del bufferr
 					lw t1, 0(t1)
 					bge t0, t1, leer_archivo_d # Se lee mas info
-					# Se fija si son menos char de input, que pasen todos
-					bge s6, t1, continue_for_d # Leidos > tam bufferr
+					
+					# Se fija si leyo menos chars que el bufferr, es que termino el archivo
+					bge s6, t1, continue_for_d # Leidos >= tam bufferr
 					blt t0, s6, continue_for_d # Recorridos < Leidos
 					li t4, 1 # Flag de fin de archivo
 					b escribir_archivo_d # Se va a escribir el archivo
@@ -377,15 +412,16 @@ debe_leer_d:		la t1, tbufr # Tam del bufferr
 continue_for_d:		b for_loop_d
 
 					# Read to file opened
-leer_archivo_d:		li v0, SYS_read    # system call for read to file
-					move a0, s1      # file descriptor 
-					la   a1, bufferr   # address of buffer from which to read
+leer_archivo_d:		li v0, SYS_read		# system call for read to file
+					move a0, s1			# file descriptor 
+					la a1, bufferr		# address of buffer from which to read
 					la t0, tbufr
-					lw t0, 0(t0) # tam bufferr
-					move   a2, t0       # buffer length
-					syscall            # read from file
+					lw t0, 0(t0)		# tam bufferr
+					move a2, t0			# buffer length
+					syscall				# read from file
 
-					move s6, v0 # Se trae la cantidad de bytes leidos
+					sw v0, 4($fp) # Se guarda la cantidad de bytes leidos
+					lw s6, 4($fp) # Se trae a s6
 					addi t1, zero, -1
 					beq s6, t1, error_lectura_d # Si da -1 es un error
 					beqz s6, termino_input_d # Si da 0 termino la entrada de datos
@@ -397,23 +433,34 @@ leer_archivo_d:		li v0, SYS_read    # system call for read to file
 
 termino_input_d:	li t4, 1 # se indica que termino el input
 					bgtz t6, escribir_archivo_d # Se va a escribir el buffer si debe
+					li v0, 0 # Sin error
 					b salir_decode # Sino sale 
 
 					# Write to file opened
-escribir_archivo_d:	li   v0, SYS_write       # system call for write to file
-					move a0, s2      # file descriptor 
-					la   a1, bufferw   # address of buffer from which to write
-					move   a2, t6       # buffer length
-					syscall            # write to file
+escribir_archivo_d:	li v0, SYS_write	# system call for write to file
+					move a0, s2			# file descriptor 
+					la a1, bufferw		# address of buffer from which to write
+					move a2, t6			# buffer length
+					syscall				# write to file
 
+					sw v0, 0($fp) # Se guarda si da error
+					lw t2, 0($fp) # Se trae a t2
+					addi t1, zero, -1
+					beq t2, t1, error_escritura_d # Si da -1 es un error
+					
 					# Reset buffer
 					add t6, zero, zero # el puntero del bufferw va en 0
 
 					beqz t4, leer_archivo_d # si no llego el fin del input, busca mas datos
 
-error_fin_dic_d:	b salir_decode 
+error_escritura_d:	li v0, 7 # Trae el codigo de error
+					b salir_decode
 
-error_lectura_d:	b salir_decode 
+error_lectura_d:	li v0, 6 # Trae el codigo de error
+					b salir_decode
+					
+error_fin_dic_d:	li v0, 5 # Trae el codigo de error
+					b salir_decode
 
 					# Sale de la funcion
 salir_decode:		lw ra, 8(sp)
